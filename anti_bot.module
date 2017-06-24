@@ -1,0 +1,101 @@
+<?php
+/**
+ * Implements hook_config_info().
+ */
+function anti_bot_config_info() {
+  $prefixes['anti_bot.settings'] = array(
+    'label' => t('Anti bot'),
+    'group' => t('Configuration'),
+  );
+  
+  return $prefixes;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function anti_bot_menu() {
+  
+  $items = array();
+  
+  $items['admin/config/people/anti-bot'] = array(
+    'title' => 'Anti bot',
+    'description' => 'Anti bot module settings.',
+    'page callback' => 'backdrop_get_form',
+    'page arguments' => array('anti_bot_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'anti_bot.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_form_alter().
+ * Add fields to comment form for anonymous
+ */
+function anti_bot_form_alter(&$form, &$form_state, $form_id) {
+  if (!user_is_anonymous()) {
+    return;
+  }
+  
+  $config          = config('anti_bot.settings');
+  $protected_forms = $config->get('protected_forms');
+  $checkbox_a      = $config->get('checkbox_a');
+  $checkbox_b      = $config->get('checkbox_b');
+
+  if (in_array($form_id, $protected_forms)) {
+
+    $form[$checkbox_a] = array(
+      '#type' => 'checkbox',
+      '#title' => t("I'm not a robot"),
+      '#weight' => 0.01, 
+    );
+
+    $form[$checkbox_b] = array(
+      '#type' => 'checkbox',
+      '#title' => t("I'm a spambot"),
+      '#weight' => 0.02, 
+      '#prefix' => '<div class="element-invisible">',
+      '#suffix' => '</div>',
+    );
+
+    $form['#validate'][] = 'anti_bot_form_validate';
+  }
+}
+ 
+/**
+ * Validate callback.
+ */
+function anti_bot_form_validate($form, $form_state) {
+  
+  $config         = config('anti_bot.settings');
+  $checkbox_a     = $config->get('checkbox_a');
+  $checkbox_b     = $config->get('checkbox_b');
+  $log_blocked    = $config->get('log_blocked');
+  
+  if (!$form_state['values'][$checkbox_a] || $form_state['values'][$checkbox_b]) {
+    form_set_error($checkbox_a, t('You are robot?'));
+    
+    if ($log_blocked) {
+      watchdog(
+        'Anti bot',
+        '<strong>Spam submission attempt from IP</strong>: @ip, '
+          . '<br /><strong>using form</strong>: @form_id, '
+          . '<br /><strong>I am not a robot</strong>: @human, '
+          . '<br /><strong>I am a spambot</strong>: @bot, '
+          . '<br /><strong>User-Agent</strong>: @ua, '
+          . '<br /><strong>$_POST content</strong>: <pre>@post</pre>',
+        array(
+          '@form_id' => $form['#form_id'],
+          '@ip'      => ip_address(),
+          '@ua'     => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'Unknown',
+          '@post'    => print_r($_POST, TRUE),
+          '@human'   => $form_state['values'][$checkbox_a],
+          '@bot'     => $form_state['values'][$checkbox_b],
+        ),
+        WATCHDOG_WARNING
+      );
+    }
+  }
+}

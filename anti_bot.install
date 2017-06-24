@@ -1,0 +1,36 @@
+<?php
+/**
+ * @file
+ * Module install
+ */
+
+/**
+ * Implements hook_install().
+ */
+function anti_bot_install() {
+  $config          = config('anti_bot.settings');
+  $protected_forms = array();
+  $checkbox_a      = _generate_field_name();
+  $checkbox_b      = _generate_field_name();
+  
+  foreach (array_keys(node_type_get_names()) as $node_type) {
+    $protected_forms[] = 'comment_node_' . $node_type . '_form';
+  }
+  
+  if (module_exists('contact')) {
+    $protected_forms[] = 'contact_site_form';
+  }
+  
+  $config->set('checkbox_a',      $checkbox_a);
+  $config->set('checkbox_b',      $checkbox_b);
+  $config->set('protected_forms', $protected_forms);
+
+  $config->save();
+
+}
+
+
+function _generate_field_name($length = 9) {
+  $str = '0123456789-abcdefghijklmnopqrstuvwxyz_';
+  return substr(str_shuffle($str), 0, $length);
+}
